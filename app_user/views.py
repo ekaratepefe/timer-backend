@@ -9,6 +9,8 @@ from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from app_timers.models import Label, TimerSession
 from . import serializers
 from .serializers import CustomUserSerializer
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -143,6 +145,12 @@ class RegisterUserView(APIView):
             # Hash the password before saving
             hashed_password = make_password(password)
             user = serializer.save(password=hashed_password, first_name=first_name, last_name=last_name)
+            # Create default Label and Session
+            try:
+                Label.objects.create(user=user, title="Default Label")
+                TimerSession.objects.create(user=user)
+            except:
+                pass
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
