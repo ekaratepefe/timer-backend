@@ -461,7 +461,7 @@ class FilteredWorkBlockAPIView(generics.ListAPIView):
         user_blocks = TimerBlock.objects.filter(user=self.request.user).order_by('-created_at')
         unique_blocks = {}
         for block in user_blocks:
-            key = (block.label.id, block.work_duration, block.break_duration)
+            key = (block.label.title, block.work_duration, block.break_duration)
             if key not in unique_blocks:
                 unique_blocks[key] = block
         return list(unique_blocks.values())[:self.request.query_params.get('n', 10)]
@@ -644,7 +644,7 @@ class TimerBlockNoteView(generics.RetrieveUpdateDestroyAPIView):
         instance.save()
 
 
-class AddToSessionView(generics.UpdateAPIView):
+class AddToSessionView(generics.GenericAPIView):
     """
     ## 📄 **Add Work Block to Session API**
 
@@ -666,10 +666,6 @@ class AddToSessionView(generics.UpdateAPIView):
         -H "Content-Type: application/json" \
         -d '{"timer_block_id": 1}'
         ```
-
-        {
-        "timer_block_id": 1
-        }
 
     - 📤 **Output:**
         - ✅ **Successful Addition to Session:**
@@ -695,24 +691,26 @@ class AddToSessionView(generics.UpdateAPIView):
     serializer_class = AddToSessionSerializer
     permission_classes = [IsAuthenticated]
 
-    def update(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         try:
             timer_block_id = request.data.get("timer_block_id")
             TimerBlock.objects.get(id=timer_block_id)
             session = TimerSession.objects.get(user=request.user)
-        except:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        except TimerBlock.DoesNotExist:
+            return Response({"detail": "Timer Block not found."}, status=status.HTTP_404_NOT_FOUND)
+        except TimerSession.DoesNotExist:
+            return Response({"detail": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Timer block ID'yi ekliyoruz
+        # Add the timer block ID if it's not already in the session
         if timer_block_id not in session.timer_blocks.split('\n'):
             session.timer_blocks += f"{timer_block_id}\n"
             session.save()
+            return Response({"message": "Timer Block added to session."}, status=status.HTTP_200_OK)
         else:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
-        return Response({"message": "Timer Block added to session."}, status=status.HTTP_200_OK)
+            return Response({"detail": "Timer Block already in session."}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class RemoveFromSessionView(generics.UpdateAPIView):
+class RemoveFromSessionView(generics.DestroyAPIView):
     """
     ## 📄 **Remove Work Block from Session API**
 
@@ -720,7 +718,7 @@ class RemoveFromSessionView(generics.UpdateAPIView):
 
     API to remove a specific work block from the user's session.
 
-    - 📨 **HTTP Method:** POST
+    - 📨 **HTTP Method:** DELETE
 
     - 📥 **Input:**
         - 🛂 **Authorization Header (string):** Bearer token for the authenticated user.
@@ -729,7 +727,7 @@ class RemoveFromSessionView(generics.UpdateAPIView):
 
         - Example Request:
         ```shell
-        curl -X POST http://example.com/api/session/remove-work-block/ \
+        curl -X DELETE http://example.com/api/session/remove-work-block/ \
         -H "Authorization: Bearer <token>" \
         -H "Content-Type: application/json" \
         -d '{"timer_block_id": 1}'
@@ -765,16 +763,17 @@ class RemoveFromSessionView(generics.UpdateAPIView):
                 - ❌ Status: 400 Bad Request
                 - 📄 Response JSON: `{"detail": "Timer Block ID not found in session."}`
     """
-    serializer_class = RemoveFromSessionSerializer
     permission_classes = [IsAuthenticated]
 
-    def update(self, request, *args, **kwargs):
+    def destroy(self, request, *args, **kwargs):
         try:
             timer_block_id = request.data.get("timer_block_id")
             TimerBlock.objects.get(id=timer_block_id)
             session = TimerSession.objects.get(user=request.user)
-        except:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        except TimerBlock.DoesNotExist:
+            return Response({"detail": "Timer Block not found."}, status=status.HTTP_404_NOT_FOUND)
+        except TimerSession.DoesNotExist:
+            return Response({"detail": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
 
         # Timer block ID'yi kontrol et ve sil
         timer_blocks_list = session.timer_blocks.split('\n')
@@ -785,7 +784,6 @@ class RemoveFromSessionView(generics.UpdateAPIView):
             return Response({"message": "Timer Block removed from session."}, status=status.HTTP_200_OK)
         else:
             return Response({"detail": "Timer Block ID not found in session."}, status=status.HTTP_400_BAD_REQUEST)
-
 
 class WorkBlockStatsView(generics.UpdateAPIView):
     """
@@ -1139,8 +1137,8 @@ class StopWorkBlockView(generics.UpdateAPIView):
             timer_block.percentage_of_completion = self.calculate_percentage(timer_block)
             timer_block.completed_at = timezone.now()
             timer_block.save()
-        except:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({
             "percentage_of_completion": timer_block.percentage_of_completion
         }, status=status.HTTP_200_OK)
@@ -1225,28 +1223,25 @@ class ListWorkBlocksInSessionView(APIView):
 
     def get(self, request, *args, **kwargs):
         user = self.request.user
-        session = get_object_or_404(TimerSession, user=user)  # Ensure session exists
+        session, created = TimerSession.objects.get_or_create(user=user)  # Ensure session exists
 
-        # Retrieve the timer block IDs and maintain their order
-        block_ids = session.timer_blocks.strip().split("\n")
+        # Handle the case where timer_blocks might be None
+        block_ids = session.timer_blocks.strip().split("\n") if session.timer_blocks else []
         valid_blocks = []
-        try:
-            for block_id in block_ids:
-                try:
-                    # Check if the TimerBlock with the given ID exists
-                    timer_block = TimerBlock.objects.get(id=int(block_id))
-                    valid_blocks.append({
-                        "id": str(timer_block.id),
-                        "label": str(timer_block.label),
-                        "note_title": str(timer_block.note_title),
-                        "work_duration": str(timer_block.work_duration),
-                        "break_duration": str(timer_block.break_duration),
-                        "percentage_of_completion": str(timer_block.percentage_of_completion)
-                    })
-                except TimerBlock.DoesNotExist:
-                    continue  # Ignore invalid block IDs
-        except:
-            return Response(data={"detail": "Session can be empty."}, status=status.HTTP_404_NOT_FOUND)
+        for block_id in block_ids:
+            try:
+                # Check if the TimerBlock with the given ID exists
+                timer_block = TimerBlock.objects.get(id=int(block_id))
+                valid_blocks.append({
+                    "id": str(timer_block.id),
+                    "label": str(timer_block.label),
+                    "note_title": str(timer_block.note_title),
+                    "work_duration": str(timer_block.work_duration),
+                    "break_duration": str(timer_block.break_duration),
+                    "percentage_of_completion": str(timer_block.percentage_of_completion)
+                })
+            except TimerBlock.DoesNotExist:
+                continue  # Ignore invalid block IDs
 
         return Response(data=valid_blocks, status=status.HTTP_200_OK)
 

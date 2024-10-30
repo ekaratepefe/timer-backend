@@ -6,8 +6,8 @@ from rest_framework.permissions import IsAuthenticated
 from .app_operations_statistics import StatisticsOperations
 
 class StatisticsDashboardView(APIView):
-    permission_classes = [IsAuthenticated]  # Kullanıcıların kimlik doğrulamasını gerektirir
+    permission_classes = [IsAuthenticated]  
 
     def get(self, request):
         stats = StatisticsOperations.calculate_user_statistics(request.user)
-        return Response({'statistics': stats}, status=200)  # Başarı durumunda 200 yanıtı döner
+        return Response({'statistics': stats}, status=200)

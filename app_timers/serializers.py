@@ -35,9 +35,17 @@ class WorkBlockListSerializer(serializers.ModelSerializer):
 
 # Serializer for listing filtered work blocks (no repetition)
 class FilteredWorkBlockSerializer(serializers.ModelSerializer):
+    label = serializers.SerializerMethodField()
+
     class Meta:
-        model = TimerBlock
+        model = TimerBlock  # Model adınızı güncelleyin
         fields = ['label', 'work_duration', 'break_duration']
+
+    def get_label(self, obj):
+        return {
+            "id": obj.label.id,
+            "title": obj.label.title
+        }
 
 # Serializer for creating a custom user
 class CustomUserSerializer(serializers.ModelSerializer):
@@ -58,7 +66,7 @@ from .models import TimerBlock, TimerSession
 class CreateTimerBlockSerializer(serializers.ModelSerializer):
     class Meta:
         model = TimerBlock
-        fields = ['label', 'work_duration', 'break_duration', 'note_title', 'note_description']
+        fields = ['id', 'label', 'work_duration', 'break_duration', 'note_title', 'note_description']
 
 class TimerBlockDetailSerializer(serializers.ModelSerializer):
     class Meta:
