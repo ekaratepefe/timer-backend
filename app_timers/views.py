@@ -82,7 +82,7 @@ class LabelListAPIView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Label.objects.filter(user=self.request.user)
+        return Label.objects.filter(user=self.request.user).order_by('-last_used')
 
 
 class LabelCreateAPIView(generics.CreateAPIView):
@@ -211,7 +211,7 @@ class LabelDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Label.objects.filter(user=self.request.user)
+        return Label.objects.filter(user=self.request.user).order_by('-last_used')
 
 
 class LabelDetailOfTitleView(APIView):
@@ -275,6 +275,10 @@ class LabelDetailOfTitleView(APIView):
             "description": label.description,
         }, status=status.HTTP_200_OK)
 
+
+from django.utils import timezone
+from rest_framework import generics
+from rest_framework.permissions import IsAuthenticated
 
 class LabelNoteUpdateAPIView(generics.RetrieveUpdateDestroyAPIView):
     """
@@ -342,13 +346,17 @@ class LabelNoteUpdateAPIView(generics.RetrieveUpdateDestroyAPIView):
         return Label.objects.filter(user=self.request.user)
 
     def perform_update(self, serializer):
-        # Save the note, can be empty to delete it
-        serializer.save(notes=self.request.data.get('notes', ""))
+        # Save the note and update last_used field
+        instance = serializer.save(notes=self.request.data.get('notes', ""))
+        instance.last_used = timezone.now()  # Add the current date and time
+        instance.save()  # Save the changes
 
     def perform_destroy(self, instance):
         # Instead of deleting the Label, clear the 'notes' field
         instance.notes = ""
+        instance.last_used = timezone.now()  # Add the current date and time
         instance.save()
+
 
 
 class WorkBlockListAPIView(generics.ListAPIView):
@@ -574,6 +582,73 @@ class TimerBlockDetailView(generics.RetrieveAPIView):
 
     def get_queryset(self):
         return TimerBlock.objects.filter(user=self.request.user)
+
+
+class TimerBlockListView(APIView):
+    """
+    ## 📄 **Timer Block List API**
+
+    🔗 **API URL:** `api/timer-blocks/`
+
+    API to retrieve all timer blocks linked to a specific label title for the authenticated user.
+
+    - 📨 **HTTP Method:** POST
+
+    - 📥 **Input:**
+        - 🛂 **Authorization Header (string):** Bearer token for the authenticated user.
+        - **label_title (in JSON body):** Title of the label to filter timer blocks by.
+
+    - 📤 **Output:**
+        - ✅ **Successful Timer Block Retrieval:**
+            - If the request is successful:
+                - ✅ Status: 200 OK
+                - 📄 Response JSON:
+                ```json
+                [
+                    {
+                        "id": 1,
+                        "note": "Example note content",
+                        "note_title": "Sample Title",
+                        "note_description": "Additional note details",
+                        "created_at": "2024-01-01T00:00:00Z"
+                    },
+                    ...
+                ]
+                ```
+
+        - ❌ **Unauthorized Access:**
+            - If the user is not authenticated:
+                - ❌ Status: 401 Unauthorized
+                - 📄 Response JSON: `{"detail": "Authentication credentials were not provided."}`
+
+        - ❌ **Label Not Found:**
+            - If no label with the given title exists:
+                - ❌ Status: 404 Not Found
+                - 📄 Response JSON: `{"detail": "Label not found."}`
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        label_title = request.data.get("label_title")
+        if not label_title:
+            return Response({"detail": "label_title is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        label = get_object_or_404(Label, title=label_title, user=request.user)
+        timer_blocks = TimerBlock.objects.filter(label=label).order_by('-created_at')
+
+        # Serialize the fields needed, including 'id'
+        data = [
+            {
+                "id": block.id,
+                "note": block.note,
+                "note_title": block.note_title,
+                "note_description": block.note_description,
+                "created_at": block.created_at
+            }
+            for block in timer_blocks
+        ]
+
+        return Response(data, status=status.HTTP_200_OK)
 
 
 class TimerBlockNoteView(generics.RetrieveUpdateDestroyAPIView):

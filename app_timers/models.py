@@ -10,6 +10,8 @@ class Label(models.Model):
     title = models.CharField(max_length=100)
     description = models.TextField(null=True, blank=True)
     notes = models.TextField(null=True, blank=True)
+    last_used = models.DateTimeField(null=True, blank=True)  # Optional field
+
 
     def __str__(self):
         return self.title

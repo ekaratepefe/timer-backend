@@ -29,6 +29,7 @@ def api_root(request, format=None):
             'Find Label (With Title)': reverse('label-detail-of-title', request=request, format=format),
             'Detail - Update - Delete Label (with ID)': reverse('label-detail', args=[1], request=request, format=format),  # Example ID = 1
             'Detail - Update - Delete Label Notes': reverse('label-notes', args=[1], request=request, format=format),  # Example ID = 1
+            'List Label Notes (Timer Blocks)': reverse('timer-block-list', request=request, format=format),
         },
         'Work Block Operations': {
             'List Work Blocks': reverse('work-block-list', request=request, format=format),

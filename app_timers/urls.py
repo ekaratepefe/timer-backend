@@ -13,7 +13,7 @@ from .views import (
     ContinueWorkBlockView,
     StopWorkBlockView,
     ListWorkBlocksInSessionView,
-    ResetSessionView, LabelDetailOfTitleView
+    ResetSessionView, LabelDetailOfTitleView, TimerBlockListView
 )
 
 
@@ -32,6 +32,8 @@ urlpatterns = [
     path('api/work-blocks/', views.WorkBlockListAPIView.as_view(), name='work-block-list'),
     path('api/work-blocks/filtered/', views.FilteredWorkBlockAPIView.as_view(), name='filtered-work-block-list'),
     path('api/timer-blocks/', CreateTimerBlockView.as_view(), name='create-timer-block'),
+    path('api/list-timer-blocks/', TimerBlockListView.as_view(), name='timer-block-list'),
+
     path('api/timer-blocks/<int:pk>/', TimerBlockDetailView.as_view(), name='timer-block-detail'),
     path('api/timer-blocks/<int:pk>/notes/', TimerBlockNoteView.as_view(), name='timer-block-notes'),
     path('api/timer-blocks/<int:pk>/stats/', WorkBlockStatsView.as_view(), name='work-block-stats'),
